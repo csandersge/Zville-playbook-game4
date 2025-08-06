@@ -20,17 +20,33 @@ const App = () => {
   const [correctZPosition, setCorrectZPosition] = useState(null);
   const [correctHPosition, setCorrectHPosition] = useState(null);
   
-  // State to store feedback message
+  // State to store feedback message (for below the grid)
   const [feedbackMessage, setFeedbackMessage] = useState('');
   
   // States to track if the user's placement for each player is correct
   const [isXPlayerCorrect, setIsXPlayerCorrect] = useState(null);
-  const [isYPlayerCorrect, setIsYPlayerCorrect] = useState(null);
+  const [isYPlayerCorrect, setIsYPlayerCorrect] = useState(null); 
   const [isZPlayerCorrect, setIsZPlayerCorrect] = useState(null);
   const [isHPlayerCorrect, setIsHPlayerCorrect] = useState(null);
 
   // State to track which player the user is currently placing
   const [playerToPlace, setPlayerToPlace] = useState('Y');
+
+  // State for the score, initialized to 0
+  const [score, setScore] = useState(0);
+
+  // State to control the visibility of the runner popup
+  const [showRunnerPopup, setShowRunnerPopup] = useState(false);
+  // State to store the name of the correct runner player
+  const [correctRunnerPlayer, setCorrectRunnerPlayer] = useState(null);
+  // State for the message within the runner popup
+  const [runnerPopupMessage, setRunnerPopupMessage] = useState('');
+
+  // NEW: State to manage the current phase of the game
+  const [gamePhase, setGamePhase] = useState('alignment'); // 'alignment', 'runnerGuess', 'runSpotGuess', 'readyForNewPlay'
+
+  // NEW: State to store the correct grid coordinates for the run spot
+  const [correctRunSpot, setCorrectRunSpot] = useState(null);
 
   // Initial player positions for the offensive line and QB
   const [players, setPlayers] = useState([
@@ -41,6 +57,72 @@ const App = () => {
     { name: 'RT', row: 1, col: 12 },
     { name: 'QB', row: 4, col: 10 }
   ]);
+
+  // List of all possible Y player placement cells
+  const yPlayerPossibilities = [
+    { row: 1, col: 13 },
+    { row: 2, col: 13 },
+    { row: 2, col: 16 },
+    { row: 1, col: 7 },
+    { row: 2, col: 7 },
+    { row: 2, col: 4 }
+  ];
+
+  // List of all possible X player placement cells
+  const xPlayerPossibilities = [
+    { row: 1, col: 1 },
+    { row: 2, col: 1 }
+  ];
+
+  // List of all possible Z player placement cells
+  const zPlayerPossibilities = [
+    { row: 1, col: 19 },
+    { row: 2, col: 19 }
+  ];
+
+  // List of all possible H player placement cells
+  const hPlayerPossibilities = [
+    { row: 5, col: 9 },
+    { row: 5, col: 11 },
+    { row: 2, col: 8 },
+    { row: 2, col: 9 },
+    { row: 2, col: 11 },
+    { row: 2, col: 12 },
+    { row: 2, col: 7 },
+    { row: 2, col: 13 },
+    { row: 2, col: 3 },
+    { row: 2, col: 17 }
+  ];
+
+  // Mapping for the numbers above the grid with their 1-indexed column for display and target
+  // 'lineIndex' represents the 1-indexed grid line that the number should be centered over.
+  // 'targetCol' is the actual column number the number represents.
+  const gridNumberPositions = [
+    { lineIndex: 2, num: '9', targetCol: 2 },  // "9" horizontally between 1:2 and 1:3 (above line 2)
+    { lineIndex: 6, num: '7', targetCol: 6 },  // "7" horizontally between 1:6 and 1:7 (above line 6)
+    { lineIndex: 7, num: '5', targetCol: 7 },  // "5" horizontally between 1:7 and 1:8 (above line 7)
+    { lineIndex: 8, num: '3', targetCol: 8 },  // "3" horizontally between 1:8 and 1:9 (above line 8)
+    { lineIndex: 9, num: '1', targetCol: 9 },  // "1" horizontally between 1:9 and 1:10 (above line 9)
+    { lineIndex: 10, num: '0', targetCol: 10 }, // "0" horizontally between 1:10 and 1:11 (above line 10)
+    { lineIndex: 11, num: '2', targetCol: 11 }, // "2" horizontally between 1:11 and 1:12 (above line 11)
+    { lineIndex: 12, num: '4', targetCol: 12 }, // "4" horizontally between 1:12 and 1:13 (above line 12)
+    { lineIndex: 13, num: '6', targetCol: 13 }, // "6" horizontally between 1:13 and 1:14 (above line 13)
+    { lineIndex: 17, num: '8', targetCol: 17 }, // "8" horizontally between 1:17 and 1:18 (above line 17)
+  ];
+
+  // Mapping for the last digit of the play call to the target column for the run spot
+  const runSpotColumnMapping = {
+    0: 10, // '0' spot is column 10
+    1: 9,  // '1' spot is column 9
+    2: 11, // '2' spot is column 11
+    3: 8,  // '3' spot is column 8
+    4: 12, // '4' spot is column 12
+    5: 7,  // '5' spot is column 7
+    6: 13, // '6' spot is column 13
+    7: 6,  // '7' spot is column 6
+    8: 17, // '8' spot is column 17
+    9: 2,  // '9' spot is column 2
+  };
 
   /**
    * Generates a new random play call and resets the game state.
@@ -72,6 +154,25 @@ const App = () => {
 
     // Final concatenated value with all three parts
     const finalPlayCall = `${tempPlayCall} ${randomThirdValue}`;
+
+    // Determine the correct runner player based on the first digit of randomThirdValue
+    const runnerDigit = Math.floor(randomThirdValue / 10);
+    let runnerPlayerName;
+    switch (runnerDigit) {
+      case 1: runnerPlayerName = 'QB'; break;
+      case 2: runnerPlayerName = 'F'; break;
+      case 4: runnerPlayerName = 'H'; break;
+      case 5: runnerPlayerName = 'Y'; break;
+      case 6: runnerPlayerName = 'X'; break;
+      case 7: runnerPlayerName = 'Z'; break;
+      default: runnerPlayerName = 'Unknown'; break; // Fallback, should not happen with current decades
+    }
+    setCorrectRunnerPlayer(runnerPlayerName);
+
+    // Determine the correct run spot based on the last digit of randomThirdValue
+    const lastDigit = randomThirdValue % 10;
+    const targetCol = runSpotColumnMapping[lastDigit];
+    setCorrectRunSpot({ row: 1, col: targetCol }); // Run spot is always in row 1
 
     // --- Logic to pre-calculate CORRECT positions for X, Y, Z, and H players based on the play call ---
     let newCorrectXPosition, newCorrectYPosition, newCorrectZPosition, newCorrectHPosition;
@@ -127,7 +228,7 @@ const App = () => {
         break;
     }
 
-    // H-Player Logic (updated for "in-between" placements)
+    // H-Player Logic
     const yIsOnRight = ['Right', 'Rip', 'Rock'].includes(randomFirstName);
     const secondValueIsLetter = ['A', 'B', 'C', 'D'].includes(randomSecondValue);
     const hIsOnRight = (yIsOnRight && secondValueIsLetter) || (!yIsOnRight && !secondValueIsLetter);
@@ -135,20 +236,28 @@ const App = () => {
     // Determine H's position based on the second value and the side
     switch (randomSecondValue) {
       case 'A':
-      case '1':
-        // These are single-cell placements
         newCorrectHPosition = hIsOnRight ? [{ row: 5, col: 11 }] : [{ row: 5, col: 9 }];
         break;
       case 'B':
-      case '2':
-        // For B and 2, the user can click on either of the two adjacent cells
+        // For 'B' plays, the positions are always "in between"
         newCorrectHPosition = hIsOnRight ? [{ row: 2, col: 11 }, { row: 2, col: 12 }] : [{ row: 2, col: 8 }, { row: 2, col: 9 }];
         break;
       case 'C':
-      case '3':
-        newCorrectHPosition = hIsOnRight ? [{ row: 2, col: 14 }] : [{ row: 2, col: 6 }];
+        newCorrectHPosition = hIsOnRight ? [{ row: 2, col: 13 }] : [{ row: 2, col: 7 }];
         break;
       case 'D':
+        newCorrectHPosition = hIsOnRight ? [{ row: 2, col: 17 }] : [{ row: 2, col: 3 }];
+        break;
+      case '1':
+        newCorrectHPosition = hIsOnRight ? [{ row: 5, col: 11 }] : [{ row: 5, col: 9 }];
+        break;
+      case '2':
+        // For '2' plays, the positions are always "in between"
+        newCorrectHPosition = hIsOnRight ? [{ row: 2, col: 11 }, { row: 2, col: 12 }] : [{ row: 2, col: 8 }, { row: 2, col: 9 }];
+        break;
+      case '3':
+        newCorrectHPosition = hIsOnRight ? [{ row: 2, col: 13 }] : [{ row: 2, col: 7 }];
+        break;
       case '4':
         newCorrectHPosition = hIsOnRight ? [{ row: 2, col: 17 }] : [{ row: 2, col: 3 }];
         break;
@@ -178,6 +287,12 @@ const App = () => {
     
     // Start the placement with 'Y'
     setPlayerToPlace('Y');
+    // Ensure runner popup is hidden when a new play is generated
+    setShowRunnerPopup(false);
+    // Clear runner popup message on new play
+    setRunnerPopupMessage('');
+    // Reset game phase
+    setGamePhase('alignment');
   };
 
   // Generate the initial play call when the component mounts
@@ -189,6 +304,11 @@ const App = () => {
    * Handles the user's click on a grid cell.
    */
   const handleCellClick = (row, col) => {
+    // Prevent clicks on the grid if the runner popup is active or if not in alignment phase
+    if (showRunnerPopup || gamePhase !== 'alignment') {
+      return;
+    }
+
     const newPosition = { row: row + 1, col: col + 1 };
 
     // Clear any previous feedback colors and message
@@ -233,9 +353,9 @@ const App = () => {
 
     // Check if the new position is occupied by another user-placed player
     const isUserOccupied = (xPlayerPositionUser && xPlayerPositionUser.row === newPosition.row && xPlayerPositionUser.col === newPosition.col) ||
-                           (yPlayerPositionUser && yPlayerPositionUser.row === newPosition.row && yPlayerPositionUser.col === newPosition.col) ||
-                           (zPlayerPositionUser && zPlayerPositionUser.row === newPosition.row && zPlayerPositionUser.col === newPosition.col) ||
-                           (hPlayerPositionUser && hPlayerPositionUser.row === newPosition.row && hPlayerPositionUser.col === newPosition.col);
+                            (yPlayerPositionUser && yPlayerPositionUser.row === newPosition.row && yPlayerPositionUser.col === newPosition.col) ||
+                            (zPlayerPositionUser && zPlayerPositionUser.row === newPosition.row && zPlayerPositionUser.col === newPosition.col) ||
+                            (hPlayerPositionUser && hPlayerPositionUser.row === newPosition.row && hPlayerPositionUser.col === newPosition.col);
     if (isUserOccupied) {
       setFeedbackMessage("That cell is already occupied by a player!");
       return;
@@ -341,28 +461,72 @@ const App = () => {
     setIsYPlayerCorrect(yCorrect);
     setIsZPlayerCorrect(zCorrect);
     setIsHPlayerCorrect(hCorrect);
+
+    // If all players are correct, show the runner popup and change phase
+    if (xCorrect && yCorrect && zCorrect && hCorrect) {
+      setRunnerPopupMessage('Correct on the alignments! Now, who is running the ball?'); // Set initial popup message
+      setShowRunnerPopup(true);
+      setGamePhase('runnerGuess'); // Change phase to runner guess
+    } else {
+      let message = 'Feedback:';
+      message += ` X: ${xCorrect ? 'Correct' : 'Try again'}.`;
+      message += ` Y: ${yCorrect ? 'Correct' : 'Try again'}.`;
+      message += ` Z: ${zCorrect ? 'Correct' : 'Try again'}.`;
+      message += ` H: ${hCorrect ? 'Correct' : 'Try again'}.`;
+      setFeedbackMessage(message + ' To try again, click on a player to move them, or click on an empty cell to start over.');
+    }
+  };
+
+  /**
+   * Handles the user's guess for the runner player.
+   */
+  const handleRunnerGuess = (guessedPlayer) => {
+    if (guessedPlayer === correctRunnerPlayer) {
+      // Removed: setScore(prevScore => prevScore + 1000); // Increment score only if runner guess is correct
+      setShowRunnerPopup(false); // Close the popup on correct guess
+      setRunnerPopupMessage(''); // Clear popup message
+      setFeedbackMessage(`Correct! Now, select where the ${correctRunnerPlayer} player is running.`); // New prompt
+      setGamePhase('runSpotGuess'); // Change phase to run spot guess
+    } else {
+      // If incorrect, update feedback within the popup
+      setRunnerPopupMessage(`Try again. Who is running the ball?`);
+      // The popup remains open
+    }
+  };
+
+  /**
+   * Handles the user's click on a number above the grid to guess the run spot.
+   */
+  const handleNumberClick = (guessedNumberCol) => {
+    if (gamePhase !== 'runSpotGuess') {
+      return; // Only allow clicks on numbers during the run spot guess phase
+    }
+
+    // The correct run spot is always in row 1
+    const isCorrectRunSpot = correctRunSpot && correctRunSpot.row === 1 && correctRunSpot.col === guessedNumberCol;
+
+    if (isCorrectRunSpot) {
+      setScore(prevScore => prevScore + 1000);
+      // Updated message as per user request
+      setFeedbackMessage(`Correct! You earned 1000 points! Click "Generate New Play" to go again.`);
+      setGamePhase('readyForNewPlay'); // Transition to a state where a new play can be generated
+    } else {
+      setFeedbackMessage(`Try again. Select where the ${correctRunnerPlayer} player is running.`);
+    }
   };
 
   /**
    * This effect runs whenever the correctness states are updated after a check.
    * It's responsible for setting the final feedback message.
+   * This useEffect is now primarily for initial alignment feedback before the runner popup.
    */
   useEffect(() => {
-    // Only run this when a check has actually been performed
-    if (isXPlayerCorrect !== null && isYPlayerCorrect !== null && isZPlayerCorrect !== null && isHPlayerCorrect !== null) {
-      if (isXPlayerCorrect && isYPlayerCorrect && isZPlayerCorrect && isHPlayerCorrect) {
-        setFeedbackMessage("Correct! Great job! Click \"Generate New Play\" to go again.");
-        setPlayerToPlace(null);
-      } else {
-        let message = 'Feedback:';
-        message += ` X: ${isXPlayerCorrect ? 'Correct' : 'Try again'}.`;
-        message += ` Y: ${isYPlayerCorrect ? 'Correct' : 'Try again'}.`;
-        message += ` Z: ${isZPlayerCorrect ? 'Correct' : 'Try again'}.`;
-        message += ` H: ${isHPlayerCorrect ? 'Correct' : 'Try again'}.`;
-        setFeedbackMessage(message + ' To try again, click on a player to move them, or click on an empty cell to start over.');
-      }
+    // Only run this when a check has actually been performed and popup is not shown
+    if (isXPlayerCorrect !== null && isYPlayerCorrect !== null && isZPlayerCorrect !== null && isHPlayerCorrect !== null && !showRunnerPopup && gamePhase === 'alignment') {
+      // The feedback message for correct alignment is now set directly in checkAlignment
+      // The feedback message for incorrect alignment is also set directly in checkAlignment
     }
-  }, [isXPlayerCorrect, isYPlayerCorrect, isZPlayerCorrect, isHPlayerCorrect]);
+  }, [isXPlayerCorrect, isYPlayerCorrect, isZPlayerCorrect, isHPlayerCorrect, showRunnerPopup, gamePhase]);
   
   const getPlayerColorClass = (isCorrect, isUserPlaced) => {
     if (!isUserPlaced) {
@@ -418,10 +582,32 @@ const App = () => {
           <div className="bg-neutral-700 rounded-lg p-4 font-mono text-xl md:text-3xl text-yellow-300 tracking-wider shadow-inner">
             {playCall}
           </div>
+          {/* Score Display */}
+          <div className="text-xl md:text-2xl font-bold text-white mt-2">
+            Score: {score}
+          </div>
         </div>
 
         {/* The Football Field Visual */}
         <div className="bg-emerald-700 rounded-lg shadow-lg p-4 flex flex-col items-center">
+          {/* Green space above the grid */}
+          <div className="w-full bg-emerald-700 h-12 rounded-t-lg relative">
+            {/* Numbers above the grid */}
+            {gridNumberPositions.map((item) => (
+              <div 
+                key={item.num}
+                className={`absolute text-white font-bold text-lg cursor-pointer ${gamePhase === 'runSpotGuess' ? 'hover:text-yellow-300' : 'cursor-default'}`}
+                style={{ 
+                  left: `calc(${item.lineIndex * (100 / 19)}%)`, // Position at the right grid line of the column
+                  bottom: '0px', // Align to the bottom of the green space
+                  transform: 'translateX(-50%)' // Center the number itself over the line
+                }}
+                onClick={() => handleNumberClick(item.targetCol)} // Pass item.targetCol as the guessed column
+              >
+                {item.num}
+              </div>
+            ))}
+          </div>
           
           {/* Grid Container */}
           <div className="w-full max-w-[calc(19*50px)] border border-neutral-600 rounded-lg overflow-hidden relative">
@@ -441,10 +627,17 @@ const App = () => {
                   // Only render the H player inside a cell if it's a single-cell placement
                   const hPlayerInCell = hPlayerPositionUser && hPlayerPositionUser.row === cellRow && hPlayerPositionUser.col === cellCol && !isHInBetweenPlay();
                   
+                  // Check if the cell is a potential player placement location
+                  const isYPlayerCandidate = playerToPlace === 'Y' && yPlayerPossibilities.some(pos => pos.row === cellRow && pos.col === cellCol);
+                  const isXPlayerCandidate = playerToPlace === 'X' && xPlayerPossibilities.some(pos => pos.row === cellRow && pos.col === cellCol);
+                  const isZPlayerCandidate = playerToPlace === 'Z' && zPlayerPossibilities.some(pos => pos.row === cellRow && pos.col === cellCol);
+                  // Correct logic for H player candidate: check against ALL possibilities
+                  const isHPlayerCandidate = playerToPlace === 'H' && hPlayerPossibilities.some(pos => pos.row === cellRow && pos.col === cellCol);
+                  
                   return (
                     <div 
                       key={colIndex} 
-                      className="w-1/19 bg-emerald-700 border-r border-b border-neutral-600 aspect-square flex items-center justify-center relative cursor-pointer"
+                      className={`w-1/19 bg-emerald-700 border-r border-b border-neutral-600 aspect-square flex items-center justify-center relative cursor-pointer ${isYPlayerCandidate || isXPlayerCandidate || isZPlayerCandidate || isHPlayerCandidate ? 'border-2 border-white' : ''}`}
                       style={{ width: `calc(100% / 19)` }}
                       onClick={() => handleCellClick(rowIndex, colIndex)}
                     >
@@ -493,13 +686,7 @@ const App = () => {
             )}
           </div>
           {feedbackMessage && (
-            <p className={`mt-4 text-center font-bold text-lg ${
-                isXPlayerCorrect === null && isYPlayerCorrect === null && isZPlayerCorrect === null && isHPlayerCorrect === null
-                ? 'text-white'
-                : isXPlayerCorrect && isYPlayerCorrect && isZPlayerCorrect && isHPlayerCorrect
-                  ? 'text-green-400'
-                  : 'text-red-400'
-              }`}>
+            <p className={`mt-4 text-center font-bold text-lg text-white`}> {/* Changed color to text-white for all feedback messages */}
               {feedbackMessage}
             </p>
           )}
@@ -509,7 +696,9 @@ const App = () => {
         <div className="flex justify-center gap-4">
           <button
             onClick={generatePlayCall}
-            className="flex items-center gap-2 px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50"
+            className={`flex items-center gap-2 px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50
+              ${gamePhase === 'readyForNewPlay' || gamePhase === 'alignment' ? '' : 'opacity-50 cursor-not-allowed'}`}
+            disabled={!(gamePhase === 'readyForNewPlay' || gamePhase === 'alignment')}
           >
             {/* Replaced lucide-react with an inline SVG */}
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -519,9 +708,9 @@ const App = () => {
           </button>
           <button
             onClick={checkAlignment}
-            disabled={!xPlayerPositionUser || !yPlayerPositionUser || !zPlayerPositionUser || !hPlayerPositionUser}
+            disabled={!xPlayerPositionUser || !yPlayerPositionUser || !zPlayerPositionUser || !hPlayerPositionUser || gamePhase !== 'alignment'}
             className={`flex items-center gap-2 px-6 py-3 font-bold rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-opacity-50
-              ${(!xPlayerPositionUser || !yPlayerPositionUser || !zPlayerPositionUser || !hPlayerPositionUser)
+              ${(!xPlayerPositionUser || !yPlayerPositionUser || !zPlayerPositionUser || !hPlayerPositionUser || gamePhase !== 'alignment')
                 ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                 : 'bg-yellow-500 hover:bg-yellow-600 text-black focus:ring-yellow-500'}`
             }
@@ -529,6 +718,28 @@ const App = () => {
             Check Alignment
           </button>
         </div>
+
+        {/* Runner Guess Popup */}
+        {showRunnerPopup && (
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-neutral-800 rounded-xl shadow-2xl p-6 md:p-8 text-center max-w-md w-full">
+              <h2 className="text-2xl font-bold text-indigo-300 mb-4">
+                {runnerPopupMessage || 'Correct on the alignments! Now, who is running the ball?'}
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                {['QB', 'F', 'H', 'Y', 'X', 'Z'].map(player => (
+                  <button
+                    key={player}
+                    onClick={() => handleRunnerGuess(player)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200"
+                  >
+                    {player}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
