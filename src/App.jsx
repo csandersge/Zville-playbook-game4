@@ -90,7 +90,7 @@ const App = () => {
     },
     {
       image: 'image_7109e3.png', // Added the new play image
-      playCall: 'Rip 3 48 Reverse Right' // Correct play call for the new image
+      playCall: 'Left 3 48 Reverse Right' // Corrected play call for the image
     },
     {
       image: 'image_7110e9.png', // Added the new play image
