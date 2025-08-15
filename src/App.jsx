@@ -421,7 +421,9 @@ const App = () => {
       generatePlayCall();
     } else if (gameMode === 'guessPlayCall') {
       // Initialize the first play for the Guess Play Call Challenge
-      loadNextPlayImage();
+      // This will now use the currentPlayIndex which should be 0 from selectGameMode
+      // And then increment it for the *next* play.
+      loadNextPlayImage(); 
     }
   }, [gameMode]); // Run this effect when gameMode changes
 
@@ -705,10 +707,12 @@ const App = () => {
       setCorrectPlayCallForImage('');
       return;
     }
-    const nextIndex = currentPlayIndex % playsData.length;
-    setCurrentPlayImage(playsData[nextIndex].image);
-    setCorrectPlayCallForImage(playsData[nextIndex].playCall);
-    setCurrentPlayIndex(prevIndex => (prevIndex + 1) % playsData.length); // Cycle to the next play
+    // Use currentPlayIndex to get the play
+    const nextPlay = playsData[currentPlayIndex];
+    setCurrentPlayImage(nextPlay.image);
+    setCorrectPlayCallForImage(nextPlay.playCall);
+    // Increment index for the *next* time this function is called
+    setCurrentPlayIndex(prevIndex => (prevIndex + 1) % playsData.length); 
     setUserPlayCallGuess(''); // Clear previous guess
     setGuessPlayCallFeedback(''); // Clear feedback
     setFeedbackMessage('Type your guess for the play call.');
@@ -733,7 +737,9 @@ const App = () => {
       setPlayerToPlace('Y');
       // The useEffect for gameMode will handle generatePlayCall()
     } else if (mode === 'guessPlayCall') {
-      loadNextPlayImage(); // Load the first play image for this mode
+      setCurrentPlayIndex(0); // Explicitly reset index to 0 when entering this mode
+      // The useEffect below will then call loadNextPlayImage with this fresh index (0)
+      // and load the first play correctly.
     }
   };
 
